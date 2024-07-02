@@ -24,7 +24,7 @@ resource "aws_subnet" "public_subnet1_ap_south_1a" {
 
 resource "aws_subnet" "public_subnet2_ap_south_1b" {
   vpc_id                  = "${aws_vpc.main_vpc.id}"
-  cidr_block              = "${var.pubsub2blk1}"
+  cidr_block              = "${var.pubsub2blk}"
   availability_zone = "ap-south-1b"
   tags = {
   	Name =  "Subnet public 2 az 1b"
@@ -32,7 +32,7 @@ resource "aws_subnet" "public_subnet2_ap_south_1b" {
 }
  resource "aws_subnet" "private_subnet_ap_south_1b" {
   vpc_id                  = "${aws_vpc.main_vpc.id}"
-  cidr_block              = "${var.prvsubblk1}"
+  cidr_block              = "${var.prvsubblk}"
   availability_zone = "us-east-1b"
   tags = {
   	Name =  "Subnet private 1 az 1b"
