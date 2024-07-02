@@ -1,47 +1,36 @@
 provider "aws" {
   # Credentials should be picked from ~/.aws/credentials
-  region     = "us-east-1"
+  region     = "ap-south-1"
 }
-
-
-
 # main vpc
 resource "aws_vpc" "main_vpc" {
   cidr_block = "${var.cidrblk}"
   enable_dns_support = true
   enable_dns_hostnames = true
   tags = {
-    Name = "useastvpc"
+    Name = "apsouthvpc"
   }
 }
 
-resource "aws_subnet" "public_subnet_us_east_1a" {
+resource "aws_subnet" "public_subnet_ap_south_1a" {
   vpc_id                  = "${aws_vpc.main_vpc.id}"
   cidr_block              = "${var.pubsubblk}"
   map_public_ip_on_launch = true
-  availability_zone = "us-east-1a"
+  availability_zone = "ap-south-1a"
   tags = {
   	Name =  "Subnet public az 1a"
   }
 }
 
-resource "aws_subnet" "private_1_subnet_us_east_1b" {
+resource "aws_subnet" "private_subnet_ap_south_1b" {
   vpc_id                  = "${aws_vpc.main_vpc.id}"
   cidr_block              = "${var.prvsubblk1}"
-  availability_zone = "us-east-1b"
+  availability_zone = "ap-south-1b"
   tags = {
   	Name =  "Subnet private 1 az 1b"
   }
 }
  
-resource "aws_subnet" "private_2_subnet_us_east_1c" {
-  vpc_id                  = "${aws_vpc.main_vpc.id}"
-  cidr_block              = "${var.prvsubblk2}"
-  availability_zone = "us-east-1c"
-  tags = {
-  	Name =  "Subnet private 2 az 1c"
-  }
-}
 #create internet gateway
 resource "aws_internet_gateway" "vpcigw" {
   vpc_id = "${aws_vpc.main_vpc.id}"
@@ -62,10 +51,10 @@ resource "aws_eip" "tuto_eip" {
   depends_on = ["aws_internet_gateway.vpcigw"]
 }
 
-#Allows the instances in private subnets to connect to internet for downloading packages
+#Allows the instances in private subnet to connect to internet for downloading packages
 resource "aws_nat_gateway" "nat" {
     allocation_id = "${aws_eip.tuto_eip.id}"
-    subnet_id = "${aws_subnet.public_subnet_us_east_1a.id}"
+    subnet_id = "${aws_subnet.public_subnet_ap_south_1a.id}"
     depends_on = ["aws_internet_gateway.vpcigw"]
 }
 
@@ -83,71 +72,16 @@ resource "aws_route" "private_route" {
 	nat_gateway_id = "${aws_nat_gateway.nat.id}"
 }
 
-# Associate subnet public_subnet_eu_west_1a to public route table
-resource "aws_route_table_association" "public_subnet_us_east_1a_association" {
-    subnet_id = "${aws_subnet.public_subnet_us_east_1a.id}"
+# Associate subnet public_subnet_ap_south_1a to public route table
+resource "aws_route_table_association" "public_subnet_ap_south_1a_association" {
+    subnet_id = "${aws_subnet.public_subnet_ap_south_1a.id}"
     route_table_id = "${aws_vpc.main_vpc.main_route_table_id}"
 }
 
-# Associate subnet private_1_subnet_eu_west_1a to private route table
-resource "aws_route_table_association" "pr_1_subnet_us_east_1b_association" {
-    subnet_id = "${aws_subnet.private_1_subnet_us_east_1b.id}"
+# Associate subnet private_subnet_ap_south_1b to private route table
+resource "aws_route_table_association" "pri_subnet_ap_south_1b_association" {
+    subnet_id = "${aws_subnet.private_subnet_ap_south_1b.id}"
     route_table_id = "${aws_route_table.private_route_table.id}"
-}
-
-# Associate subnet private_2_subnet_eu_west_1a to private route table
-resource "aws_route_table_association" "pr_2_subnet_us_east_1c_association" {
-    subnet_id = "${aws_subnet.private_2_subnet_us_east_1c.id}"
-    route_table_id = "${aws_route_table.private_route_table.id}"
-}
-
-
-resource "aws_security_group" "elb" {
-  name        = "elb_sg"
-  description = "Used in the terraform"
-
-  vpc_id = "${aws_vpc.main_vpc.id}"
-
-  # HTTP access from anywhere
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # outbound internet access
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # ensure the VPC has an Internet gateway or this step will fail
-  depends_on = ["aws_internet_gateway.vpcigw"]
-  
-}
-
-resource "aws_security_group" "bastionhost" {
-  name        = "ec2_pubbsh_sg"
-    vpc_id = "${aws_vpc.main_vpc.id}"
-    ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-  # outbound internet access
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  depends_on = ["aws_internet_gateway.vpcigw"]
-  
 }
 
 resource "aws_security_group" "pub" {
@@ -213,75 +147,6 @@ resource "aws_security_group" "prv" {
   depends_on = ["aws_internet_gateway.vpcigw"]
   
 }
-
-
-resource "aws_elb" "weblb" {
-  name = "webapp-elb"
-
-  # The same availability zone as our instance
-  subnets = ["${aws_subnet.public_subnet_us_east_1a.id}", "${aws_subnet.private_1_subnet_us_east_1b.id}", "${aws_subnet.private_2_subnet_us_east_1c.id}"]
-
-  security_groups = ["${aws_security_group.elb.id}"]
-
-  listener {
-    instance_port     = 80
-    instance_protocol = "http"
-    lb_port           = 80
-    lb_protocol       = "http"
-  }
-
-  health_check {
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 3
-    target              = "HTTP:80/"
-    interval            = 30
-  }
-  instances                   = ["${aws_instance.webpub.id}", "${aws_instance.webprv1.id}", "${aws_instance.webprv2.id}"]
-  cross_zone_load_balancing   = true
-  idle_timeout                = 400
-  connection_draining         = true
-  connection_draining_timeout = 400
-  
-  tags {
-    Name = "webapp-elb"
-  }
-}
-
-resource "aws_elb" "weblb2" {
-  name = "webapp-elb2"
-
-  # The same availability zone as our instance
-  subnets = ["${aws_subnet.private_1_subnet_us_east_1b.id}", "${aws_subnet.private_2_subnet_us_east_1c.id}"]
-
-  security_groups = ["${aws_security_group.elb.id}"]
-
-  listener {
-    instance_port     = 80
-    instance_protocol = "http"
-    lb_port           = 80
-    lb_protocol       = "http"
-  }
-
-  health_check {
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    timeout             = 3
-    target              = "HTTP:80/"
-    interval            = 30
-  }
-  instances                   = ["${aws_instance.webprv1.id}", "${aws_instance.webprv2.id}"]
-  cross_zone_load_balancing   = true
-  idle_timeout                = 400
-  connection_draining         = true
-  connection_draining_timeout = 400
-  
-  tags {
-    Name = "webapp-elb2"
-  }
-}
-
-
 
 resource "aws_instance" "webprv1" {
   instance_type = "t2.micro"
