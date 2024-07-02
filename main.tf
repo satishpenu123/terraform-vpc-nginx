@@ -147,29 +147,6 @@ resource "aws_security_group" "prv" {
   depends_on = ["aws_internet_gateway.vpcigw"]
   
 }
-
-resource "aws_instance" "webprv1" {
-  instance_type = "t2.micro"
-  ami = "${var.ami_id}"
-  key_name = "${var.key_name}"
-  vpc_security_group_ids = ["${aws_security_group.prv.id}"]
-  subnet_id              = "${aws_subnet.private_1_subnet_us_east_1b.id}"
-  user_data              = "${file("userdata.sh")}"
-  tags {
-    Name = "webserverprv1"
-  }
-}
-resource "aws_instance" "webprv2" {
-  instance_type = "t2.micro"
-  ami = "${var.ami_id}"
-  key_name = "${var.key_name}"
-  vpc_security_group_ids = ["${aws_security_group.prv.id}"]
-  subnet_id              = "${aws_subnet.private_2_subnet_us_east_1c.id}"
-  user_data              = "${file("userdata.sh")}"
-  tags {
-    Name = "webserverprv2"
-  }
-}
 resource "aws_instance" "webpub" {
   instance_type = "t2.micro"
   ami = "${var.ami_id}"
@@ -182,42 +159,18 @@ resource "aws_instance" "webpub" {
   }
 }
 
-resource "aws_instance" "bastionhost" {
+resource "aws_instance" "webprv" {
   instance_type = "t2.micro"
   ami = "${var.ami_id}"
   key_name = "${var.key_name}"
-  vpc_security_group_ids = ["${aws_security_group.bastionhost.id}"]
-  subnet_id              = "${aws_subnet.public_subnet_us_east_1a.id}"
+  vpc_security_group_ids = ["${aws_security_group.prv.id}"]
+  subnet_id              = "${aws_subnet.private_1_subnet_us_east_1b.id}"
   user_data              = "${file("userdata.sh")}"
   tags {
-    Name = "bastionhost"
+    Name = "webserverprv1"
   }
 }
-resource "aws_route53_zone" "webapp" {
-  name = "webapp.com"
-}
-resource "aws_route53_record" "webapp" {
-  zone_id = "${aws_route53_zone.webapp.zone_id}"
-  name    = "www"
-  type    = "CNAME"
-  ttl     = "5"
-  set_identifier = "prod"
-  weighted_routing_policy {
-    weight = 50
-  }
-  records        = ["${aws_elb.weblb.dns_name}"]
-}
-resource "aws_route53_record" "webapp2" {
-  zone_id = "${aws_route53_zone.webapp.zone_id}"
-  name    = "www"
-  type    = "CNAME"
-  ttl     = "5"
-  set_identifier = "prod"
-  weighted_routing_policy {
-    weight = 50
-  }
-  records        = ["${aws_elb.weblb2.dns_name}"]
-}
+
 
 module "admin-sns-email-topic" {
     source = "github.com/deanwilson/tf_sns_email"
@@ -242,13 +195,3 @@ resource "aws_cloudwatch_metric_alarm" "webappalarm" {
   insufficient_data_actions = []
 }
 
-resource "aws_route53_health_check" "webapp-hc" {
-  fqdn = "${aws_elb.weblb.dns_name}"
-  port = 80
-  type = "TCP"
-  failure_threshold = "3"
-  request_interval = "30"
-  measure_latency = 1
-  cloudwatch_alarm_name = "${aws_cloudwatch_metric_alarm.webappalarm.alarm_name}"
-  cloudwatch_alarm_region = "us-east-1"
-}
